@@ -28,6 +28,12 @@ func (app *application) errorResponse(
 	}
 }
 
+func (app *application) badRequestResponse(
+	w http.ResponseWriter, r *http.Request, err error,
+) {
+	app.errorResponse(w, r, http.StatusBadRequest, err.Error())
+}
+
 // severErrorResponse method is for when our application encounters an
 // unexpected problem at runtime
 func (app *application) serverErrorResponse(
