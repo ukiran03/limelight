@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ukiran.com/limelight/internal/data"
+	"ukiran.com/limelight/internal/validator"
 )
 
 func (app *application) createMovieHandler(
@@ -23,6 +24,21 @@ func (app *application) createMovieHandler(
 		app.badRequestResponse(w, r, err)
 		return
 	}
+
+	movie := &data.Movie{
+		Title:   input.Title,
+		Year:    input.Year,
+		Runtime: input.Runtime,
+		Genres:  input.Genres,
+	}
+
+	v := validator.New()
+
+	if data.ValidateMovie(v, movie); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
 	fmt.Fprintf(w, "%+v\n", input)
 }
 
