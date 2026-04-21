@@ -17,8 +17,7 @@ func (app *application) logError(r *http.Request, err error) {
 // errorResponse method is helper for sending JSON-formatted errr messages to
 // the client
 func (app *application) errorResponse(
-	w http.ResponseWriter, r *http.Request,
-	status int, message any,
+	w http.ResponseWriter, r *http.Request, status int, message any,
 ) {
 	env := envelope{"error": message}
 
