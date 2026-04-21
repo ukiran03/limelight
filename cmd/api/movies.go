@@ -27,7 +27,7 @@ func (app *application) showMovieHandler(w http.ResponseWriter, r *http.Request)
 		Genres:    []string{"drama", "romance", "war"},
 		Version:   1,
 	}
-	err = app.writeJSON(w, http.StatusOK, movie, nil)
+	err = app.writeJSON(w, http.StatusOK, envelope{"movie": movie}, nil)
 	if err != nil {
 		app.logger.Error(err.Error())
 		http.Error(w,
