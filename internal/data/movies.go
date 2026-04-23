@@ -1,6 +1,9 @@
 package data
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -8,25 +11,63 @@ import (
 )
 
 type Movie struct {
-	ID        int64     `json:"id"`
-	CreatedAt time.Time `json:"-"`
-	Title     string    `json:"title"`
-	Year      int32     `json:"year,omitzero"`
-	Runtime   Runtime   `json:"runtime,omitzero"`
-	Genres    []string  `json:"genres,omitzero"`
-	Version   int32     `json:"version"`
+	ID        int64     `json:"id"               db:"id"`
+	CreatedAt time.Time `json:"-"                db:"created_at"`
+	Title     string    `json:"title"            db:"title"`
+	Year      int32     `json:"year,omitzero"    db:"year"`
+	Runtime   Runtime   `json:"runtime,omitzero" db:"runtime"`
+	Genres    []string  `json:"genres,omitzero"  db:"genres"`
+	Version   int32     `json:"version"          db:"version"`
 }
 
 type MovieModel struct {
 	DB *pgxpool.Pool
 }
 
-func (m MovieModel) Insert(movie *Movie) error {
-	return nil
+func (m MovieModel) Insert(ctx context.Context, movie *Movie) error {
+	query := `
+		INSERT INTO movies (title, year, runtime, genres)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, created_at, version`
+
+	args := []any{
+		movie.Title,
+		movie.Year,
+		movie.Runtime,
+		movie.Genres,
+	}
+
+	err := m.DB.QueryRow(ctx, query, args...).Scan(
+		&movie.ID, &movie.CreatedAt, &movie.Version,
+	)
+
+	return err
 }
 
-func (m MovieModel) Get(id int64) (*Movie, error) {
-	return nil, nil
+func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
+	if id < 1 {
+		return nil, ErrRecordNotFound
+	}
+
+	query := `SELECT ID, created_at, title, YEAR, runtime,
+              genres, version  FROM movies WHERE ID = $1`
+
+	var movie Movie
+	err := m.DB.QueryRow(ctx, query, id).Scan(
+		&movie.ID, &movie.CreatedAt, &movie.Title,
+		&movie.Year, &movie.Runtime, &movie.Genres,
+		&movie.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+
+	return &movie, nil
 }
 
 func (m MovieModel) Update(movie *Movie) error {
