@@ -21,7 +21,8 @@ type Movie struct {
 }
 
 type MovieModel struct {
-	DB *pgxpool.Pool
+	DB      *pgxpool.Pool
+	Timeout time.Duration
 }
 
 func (m MovieModel) Insert(ctx context.Context, movie *Movie) error {
@@ -34,6 +35,9 @@ func (m MovieModel) Insert(ctx context.Context, movie *Movie) error {
 		movie.Title, movie.Year,
 		movie.Runtime, movie.Genres,
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
 
 	err := m.DB.QueryRow(ctx, query, args...).Scan(
 		&movie.ID, &movie.CreatedAt, &movie.Version,
@@ -51,6 +55,10 @@ func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
               genres, version  FROM movies WHERE ID = $1`
 
 	var movie Movie
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
+
 	err := m.DB.QueryRow(ctx, query, id).Scan(
 		&movie.ID, &movie.CreatedAt, &movie.Title,
 		&movie.Year, &movie.Runtime, &movie.Genres,
@@ -68,6 +76,9 @@ func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 	return &movie, nil
 }
 
+// [24-04-2026] TODO: impl errors.Is(err, context.DeadlineExceeded) in the
+// error handling.
+
 func (m MovieModel) Update(ctx context.Context, movie *Movie) error {
 	query := `UPDATE movies
               SET title = $1, year = $2, runtime = $3,
@@ -80,6 +91,9 @@ func (m MovieModel) Update(ctx context.Context, movie *Movie) error {
 		movie.Runtime, movie.Genres,
 		movie.ID, movie.Version,
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
 
 	err := m.DB.QueryRow(ctx, query, args...).Scan(&movie.Version)
 	if err != nil {
@@ -99,6 +113,10 @@ func (m MovieModel) Delete(ctx context.Context, id int64) error {
 	}
 
 	query := `DELETE FROM movies WHERE id = $1`
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
+
 	result, err := m.DB.Exec(ctx, query, id)
 	if err != nil {
 		return err

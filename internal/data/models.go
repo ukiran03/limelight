@@ -2,6 +2,7 @@ package data
 
 import (
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,6 +18,9 @@ type Models struct {
 
 func NewModels(db *pgxpool.Pool) Models {
 	return Models{
-		Movies: MovieModel{DB: db},
+		Movies: MovieModel{
+			DB:      db,
+			Timeout: 3 * time.Second,
+		},
 	}
 }
