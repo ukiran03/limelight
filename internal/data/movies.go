@@ -130,6 +130,46 @@ func (m MovieModel) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (m MovieModel) GetAll(
+	ctx context.Context, title string, genres []string, filters Filters,
+) ([]*Movie, error) {
+	query := `SELECT id, created_at, title, year,
+                     runtime, genres, version
+              FROM movies
+              WHERE (LOWER(title) = LOWER($1) OR $1 = '')
+              AND (genres @> $2 OR $2 = '{}')
+              ORDER BY ID`
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
+
+	rows, err := m.DB.Query(ctx, query, title, genres)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	movies := []*Movie{}
+
+	for rows.Next() {
+		var movie Movie
+		err := rows.Scan(
+			&movie.ID, &movie.CreatedAt, &movie.Title, &movie.Year,
+			&movie.Runtime, &movie.Genres, &movie.Version,
+		)
+		if err != nil {
+			return nil, err
+		}
+		movies = append(movies, &movie)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return movies, nil
+}
+
 func ValidateMovie(v *validator.Validator, movie *Movie) {
 	v.Check(movie.Title != "", "title", "must be provided")
 	v.Check(len(movie.Title) <= 500, "title",

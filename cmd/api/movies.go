@@ -184,7 +184,7 @@ func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request)
 	v := validator.New()
 	qs := r.URL.Query()
 
-	input.Title = app.readString(qs, "titles", "")
+	input.Title = app.readString(qs, "title", "")
 	input.Genres = app.readCSV(qs, "genres", []string{})
 
 	input.Filters.Page = app.readInt(qs, "page", 1, v)
@@ -201,5 +201,16 @@ func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	fmt.Fprintf(w, "%+v\n", input)
+	movies, err := app.models.Movies.GetAll(
+		r.Context(), input.Title, input.Genres, input.Filters,
+	)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"movies": movies}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
 }
