@@ -14,6 +14,27 @@ type Filters struct {
 	SortSafelist []string
 }
 
+type Metadata struct {
+	CurrentPage  int `json:"current_page,omitzero"`
+	PageSize     int `json:"page_size,omitzero"`
+	FirstPage    int `json:"first_page,omitzero"`
+	LastPage     int `json:"last_page,omitzero"`
+	TotalRecords int `json:"total_records,omitzero"`
+}
+
+func calculateMetadata(totalRecords, page, pageSize int) Metadata {
+	if totalRecords == 0 {
+		return Metadata{}
+	}
+	return Metadata{
+		CurrentPage:  page,
+		PageSize:     pageSize,
+		FirstPage:    1,
+		LastPage:     (totalRecords + pageSize - 1) / pageSize,
+		TotalRecords: totalRecords,
+	}
+}
+
 func (f Filters) sortColumn() string {
 	if slices.Contains(f.SortSafelist, f.Sort) {
 		return strings.TrimPrefix(f.Sort, "-")
@@ -29,6 +50,14 @@ func (f Filters) sortDirection() string {
 		return "DESC"
 	}
 	return "ASC"
+}
+
+func (f Filters) limit() int {
+	return f.PageSize
+}
+
+func (f Filters) offset() int {
+	return (f.Page - 1) * f.PageSize
 }
 
 func ValidateFilters(v *validator.Validator, f Filters) {

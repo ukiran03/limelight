@@ -133,44 +133,52 @@ func (m MovieModel) Delete(ctx context.Context, id int64) error {
 
 func (m MovieModel) GetAll(
 	ctx context.Context, title string, genres []string, filters Filters,
-) ([]*Movie, error) {
+) ([]*Movie, Metadata, error) {
 	query := fmt.Sprintf(`
-        SELECT id, created_at, title, year, runtime, genres, version
+        SELECT count(*) OVER(), id, created_at, title, year,
+               runtime, genres, version
         FROM movies
         WHERE (to_tsvector('simple', title)
                @@ plainto_tsquery('simple', $1) OR $1 = '')
         AND (genres @> $2 OR $2 = '{}')
-        ORDER BY %s %s, id ASC`,
+        ORDER BY %s %s, id ASC
+        LIMIT $3 OFFSET $4`,
 		filters.sortColumn(), filters.sortDirection())
 
 	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
 	defer cancel()
 
-	rows, err := m.DB.Query(ctx, query, title, genres)
+	args := []any{title, genres, filters.limit(), filters.offset()}
+
+	rows, err := m.DB.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 	defer rows.Close()
 
+	totalRecords := 0
 	movies := []*Movie{}
 
 	for rows.Next() {
 		var movie Movie
 		err := rows.Scan(
-			&movie.ID, &movie.CreatedAt, &movie.Title, &movie.Year,
-			&movie.Runtime, &movie.Genres, &movie.Version,
+			&totalRecords, &movie.ID, &movie.CreatedAt, &movie.Title,
+			&movie.Year, &movie.Runtime, &movie.Genres, &movie.Version,
 		)
 		if err != nil {
-			return nil, err
+			return nil, Metadata{}, err
 		}
 		movies = append(movies, &movie)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return nil, Metadata{}, err
 	}
 
-	return movies, nil
+	metadata := calculateMetadata(
+		totalRecords, filters.Page, filters.PageSize)
+
+	return movies, metadata, nil
 }
 
 func ValidateMovie(v *validator.Validator, movie *Movie) {
