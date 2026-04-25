@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// logError method is helper for logging an error message
+// logError method is helper for logging an error msg
 func (app *application) logError(r *http.Request, err error) {
 	var (
 		method = r.Method
@@ -17,9 +17,9 @@ func (app *application) logError(r *http.Request, err error) {
 // errorResponse method is helper for sending JSON-formatted errr messages to
 // the client
 func (app *application) errorResponse(
-	w http.ResponseWriter, r *http.Request, status int, message any,
+	w http.ResponseWriter, r *http.Request, status int, msg any,
 ) {
-	env := envelope{"error": message}
+	env := envelope{"error": msg}
 
 	err := app.writeJSON(w, status, env, nil)
 	if err != nil {
@@ -40,15 +40,15 @@ func (app *application) serverErrorResponse(
 	w http.ResponseWriter, r *http.Request, err error,
 ) {
 	app.logError(r, err)
-	message := "server encountered a problem and could not process your request"
-	app.errorResponse(w, r, http.StatusInternalServerError, message)
+	msg := "server encountered a problem and could not process your request"
+	app.errorResponse(w, r, http.StatusInternalServerError, msg)
 }
 
 // notFoundResponse method will be used to send a 404 Not Found and JSON
 // response to client
 func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request) {
-	message := "the request resource could not be found"
-	app.errorResponse(w, r, http.StatusNotFound, message)
+	msg := "the request resource could not be found"
+	app.errorResponse(w, r, http.StatusNotFound, msg)
 }
 
 // methodNotAllowedResponse method will be used to send a 405 Method Not
@@ -56,9 +56,9 @@ func (app *application) notFoundResponse(w http.ResponseWriter, r *http.Request)
 func (app *application) methodNotAllowedResponse(
 	w http.ResponseWriter, r *http.Request,
 ) {
-	message := fmt.Sprintf(
+	msg := fmt.Sprintf(
 		"the %s method is not supported for this resource", r.Method)
-	app.errorResponse(w, r, http.StatusMethodNotAllowed, message)
+	app.errorResponse(w, r, http.StatusMethodNotAllowed, msg)
 }
 
 func (app *application) failedValidationResponse(
@@ -70,6 +70,13 @@ func (app *application) failedValidationResponse(
 func (app *application) editConflictResponse(
 	w http.ResponseWriter, r *http.Request,
 ) {
-	message := "unable to update the record due to an edit conflict, please try again"
-	app.errorResponse(w, r, http.StatusConflict, message)
+	msg := `unable to update the record due to an edit conflict,please try again`
+	app.errorResponse(w, r, http.StatusConflict, msg)
+}
+
+func (app *application) rateLimitExceededResponse(
+	w http.ResponseWriter, r *http.Request,
+) {
+	msg := "rate limit exceeded"
+	app.errorResponse(w, r, http.StatusTooManyRequests, msg)
 }
