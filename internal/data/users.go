@@ -12,13 +12,13 @@ import (
 )
 
 type User struct {
-	ID        int64
-	CreateAt  time.Time
-	Name      string
-	Email     string
-	Password  password
-	Activated bool
-	Version   int
+	ID        int64     `json:"id"        db:"id"`
+	CreateAt  time.Time `json:"create_at" db:"create_at"`
+	Name      string    `json:"name"      db:"name"`
+	Email     string    `json:"email"     db:"email"`
+	Password  password  `json:"-"         db:"password"`
+	Activated bool      `json:"activated" db:"activated"`
+	Version   int       `json:"-"         db:"version"`
 }
 
 type password struct {
@@ -75,7 +75,7 @@ func (m UserModel) Insert(ctx context.Context, user *User) error {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		switch {
-		case errors.As(err, pgErr):
+		case errors.As(err, &pgErr):
 			if pgErr.Code == pgErrCodeUniqueViolation {
 				return ErrDuplicateEmail
 			}
@@ -129,7 +129,7 @@ func (m UserModel) Update(ctx context.Context, user *User) error {
 	if err != nil {
 		var pgErr *pgconn.PgError
 		switch {
-		case errors.As(err, pgErr):
+		case errors.As(err, &pgErr):
 			if pgErr.Code == pgErrCodeUniqueViolation {
 				return ErrDuplicateEmail
 			}
