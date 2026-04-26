@@ -2,11 +2,11 @@ package data
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"ukiran.com/limelight/internal/validator"
 )
@@ -67,7 +67,7 @@ func (m MovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 	)
 	if err != nil {
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			return nil, ErrRecordNotFound
 		default:
 			return nil, err
@@ -99,7 +99,7 @@ func (m MovieModel) Update(ctx context.Context, movie *Movie) error {
 	err := m.DB.QueryRow(ctx, query, args...).Scan(&movie.Version)
 	if err != nil {
 		switch {
-		case errors.Is(err, sql.ErrNoRows):
+		case errors.Is(err, pgx.ErrNoRows):
 			return ErrEditConflict
 		default:
 			return err
