@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"time"
 
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/validator"
@@ -57,9 +60,13 @@ func (app *application) registerUserHandler(
 
 	// send the email in a background goroutine
 	app.background(func() {
-		err = app.mailer.Send(user.Email, "user_welcome.tmpl", user)
+		// create a 10-second timeout specifically for this email attempt
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		err = app.mailer.Send(ctx, user.Email, "user_welcome.tmpl", user)
 		if err != nil {
-			app.logger.Error(err.Error())
+			app.logger.Error(fmt.Sprintf("failed to send email: %v", err))
 		}
 	})
 

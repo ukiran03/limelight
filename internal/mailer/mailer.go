@@ -2,6 +2,7 @@ package mailer
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	ht "html/template"
 	tt "text/template"
@@ -40,7 +41,7 @@ func New(host string, port int, username, password, sender string) (
 	return mailer, nil
 }
 
-func (m *Mailer) Send(recipient, templateFile string, data any) error {
+func (m *Mailer) Send(ctx context.Context, recipient, templateFile string, data any) error {
 	textTmpl, err := tt.New("").ParseFS(templateFS, "templates/"+templateFile)
 	if err != nil {
 		return err
@@ -85,5 +86,5 @@ func (m *Mailer) Send(recipient, templateFile string, data any) error {
 	msg.SetBodyString(mail.TypeTextPlain, plainBody.String())
 	msg.AddAlternativeString(mail.TypeTextHTML, htmlBody.String())
 
-	return m.client.DialAndSend(msg)
+	return m.client.DialAndSendWithContext(ctx, msg)
 }
