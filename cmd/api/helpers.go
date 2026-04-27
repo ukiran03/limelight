@@ -142,7 +142,10 @@ func (app *application) readInt(
 
 func (app *application) background(fn func()) {
 	// launch a background goroutine
+
+	app.wg.Add(1)
 	go func() {
+		defer app.wg.Done()
 		// recover any panic
 		defer func() {
 			pv := recover()
