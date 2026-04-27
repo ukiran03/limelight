@@ -139,3 +139,19 @@ func (app *application) readInt(
 
 	return i
 }
+
+func (app *application) background(fn func()) {
+	// launch a background goroutine
+	go func() {
+		// recover any panic
+		defer func() {
+			pv := recover()
+			if pv != nil {
+				app.logger.Error(fmt.Sprintf("%v", pv))
+			}
+		}()
+
+		// execute the arbitraty function passed as parameter
+		fn()
+	}()
+}
