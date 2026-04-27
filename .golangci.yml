@@ -1,0 +1,12 @@
+run:
+  version: "2"
+
+linters:
+  enable:
+    - staticcheck
+  settings:
+    staticcheck:
+      checks:
+        - "-QF1008"  # disable the rule QF1008
+
+version: "2"
