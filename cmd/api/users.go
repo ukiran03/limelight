@@ -50,7 +50,6 @@ func (app *application) registerUserHandler(
 		switch {
 		case errors.Is(err, data.ErrDuplicateEmail):
 			v.AddError("email", "a user with this email address already exists")
-
 			app.failedValidationResponse(w, r, v.Errors)
 		default:
 			app.serverErrorResponse(w, r, err)
@@ -58,13 +57,27 @@ func (app *application) registerUserHandler(
 		return
 	}
 
+	// After the user record has been created in the database, generate a new
+	// activation token for the user
+	token, err := app.models.Tokens.New(
+		r.Context(), user.ID, (3 * 24 * time.Hour), data.ScopeActivation)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
 	// send the email in a background goroutine
 	app.background(func() {
+		data := map[string]any{
+			"activationToken": token.Plaintext,
+			"userID":          user.ID,
+		}
+
 		// create a 10-second timeout specifically for this email attempt
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		err = app.mailer.Send(ctx, user.Email, "user_welcome.tmpl", user)
+		err = app.mailer.Send(ctx, user.Email, "user_welcome.tmpl", data)
 		if err != nil {
 			app.logger.Error(fmt.Sprintf("failed to send email: %v", err))
 		}
