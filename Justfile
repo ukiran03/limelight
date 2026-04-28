@@ -1,3 +1,7 @@
+# List available recipes
+default:
+    @just --list
+
 # Run all checks
 check: vet lint
 
