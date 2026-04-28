@@ -14,12 +14,17 @@ var (
 
 type Models struct {
 	Movies MovieModel
+	Tokens TokenModel
 	Users  UserModel
 }
 
 func NewModels(db *pgxpool.Pool) Models {
 	return Models{
 		Movies: MovieModel{
+			DB:      db,
+			Timeout: 3 * time.Second,
+		},
+		Tokens: TokenModel{
 			DB:      db,
 			Timeout: 3 * time.Second,
 		},
