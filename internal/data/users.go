@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"time"
 
@@ -12,13 +13,13 @@ import (
 )
 
 type User struct {
-	ID        int64     `json:"id"        db:"id"`
-	CreateAt  time.Time `json:"create_at" db:"create_at"`
-	Name      string    `json:"name"      db:"name"`
-	Email     string    `json:"email"     db:"email"`
-	Password  password  `json:"-"         db:"password"`
-	Activated bool      `json:"activated" db:"activated"`
-	Version   int       `json:"-"         db:"version"`
+	ID        int64     `json:"id"         db:"id"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	Name      string    `json:"name"       db:"name"`
+	Email     string    `json:"email"      db:"email"`
+	Password  password  `json:"-"          db:"password"`
+	Activated bool      `json:"activated"  db:"activated"`
+	Version   int       `json:"-"          db:"version"`
 }
 
 type password struct {
@@ -70,7 +71,7 @@ func (m UserModel) Insert(ctx context.Context, user *User) error {
 	defer cancel()
 
 	err := m.DB.QueryRow(ctx, query, args...).Scan(
-		&user.ID, &user.CreateAt, &user.Version,
+		&user.ID, &user.CreatedAt, &user.Version,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -97,7 +98,7 @@ func (m UserModel) GetByEmail(ctx context.Context, email string) (*User, error) 
 	defer cancel()
 
 	err := m.DB.QueryRow(ctx, query, email).Scan(
-		&user.ID, &user.CreateAt, &user.Name, &user.Email,
+		&user.ID, &user.CreatedAt, &user.Name, &user.Email,
 		&user.Password.hash, &user.Activated, &user.Version,
 	)
 	if err != nil {
@@ -140,4 +141,40 @@ func (m UserModel) Update(ctx context.Context, user *User) error {
 		}
 	}
 	return nil
+}
+
+func (m UserModel) GetForToken(
+	ctx context.Context, tokenScope, tokenPlaintext string,
+) (*User, error) {
+	tokenHash := sha256.Sum256([]byte(tokenPlaintext))
+
+	query := `SELECT users.id, users.created_at, users.name,
+                     users.email, users.password_hash, users.activated,
+                     users.version
+              FROM users
+              INNER JOIN tokens ON users.id = tokens.user_id
+              WHERE tokens.hash = $1
+                    AND tokens.scope = $2
+                    AND tokens.expiry > $3`
+
+	// we pass the current time as the value to check against the token expiry.
+	args := []any{tokenHash[:], tokenScope, time.Now()}
+	var user User
+
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
+
+	err := m.DB.QueryRow(ctx, query, args...).Scan(
+		&user.ID, &user.CreatedAt, &user.Name, &user.Email,
+		&user.Password.hash, &user.Activated, &user.Version,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil, ErrRecordNotFound
+		default:
+			return nil, err
+		}
+	}
+	return &user, nil
 }

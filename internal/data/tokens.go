@@ -47,9 +47,8 @@ type TokenModel struct {
 // New method is a shortcut which creates a new Token struct and then inserts
 // the data in the tokens table.
 func (m TokenModel) New(
-	ctx context.Context, userID int64, ttl time.Duration, scope string) (
-	*Token, error,
-) {
+	ctx context.Context, userID int64, ttl time.Duration, scope string,
+) (*Token, error) {
 	token := generateToken(userID, ttl, scope)
 
 	err := m.Insert(context.Background(), token)
