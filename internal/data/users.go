@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -115,7 +116,7 @@ func (m UserModel) GetByEmail(ctx context.Context, email string) (*User, error) 
 func (m UserModel) Update(ctx context.Context, user *User) error {
 	query := `UPDATE users
               SET name = $1, email = $2, password_hash = $3,
-                  activated = $4, version = version + 1,
+                  activated = $4, version = version + 1
               WHERE id = $5 AND version = $6
               RETURNING version`
 	args := []any{
@@ -134,6 +135,9 @@ func (m UserModel) Update(ctx context.Context, user *User) error {
 			if pgErr.Code == pgErrCodeUniqueViolation {
 				return ErrDuplicateEmail
 			}
+			// This catches our comma error (Code 42601)
+			return fmt.Errorf("database error: %s (code %s)",
+				pgErr.Message, pgErr.Code)
 		case errors.Is(err, pgx.ErrNoRows):
 			return ErrEditConflict
 		default:
