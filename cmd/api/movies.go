@@ -175,7 +175,7 @@ func (app *application) deleteMovieHandler(
 	}
 }
 
-func (app *application) listMovieHandler(w http.ResponseWriter, r *http.Request) {
+func (app *application) listMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Title  string
 		Genres []string
