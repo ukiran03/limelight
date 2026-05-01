@@ -36,6 +36,7 @@ func NewLogger() *slog.Logger {
 					return tint.Attr(9, a)
 				}
 			}
+
 			// color(yellow) to source location
 			if a.Key == slog.SourceKey && len(groups) == 0 {
 				return tint.Attr(12, a)

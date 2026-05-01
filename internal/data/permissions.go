@@ -19,6 +19,19 @@ type PermissionModel struct {
 	Timeout time.Duration
 }
 
+func (m PermissionModel) AddForUser(
+	ctx context.Context, userID int64, perms ...string,
+) error {
+	query := `INSERT INTO users_permissions
+              SELECT $1, permissions.id FROM permissions
+                     WHERE permissions.code = ANY($2)`
+	ctx, cancel := context.WithTimeout(ctx, m.Timeout)
+	defer cancel()
+
+	_, err := m.DB.Exec(ctx, query, userID, perms)
+	return err
+}
+
 func (m PermissionModel) GetAllForUser(ctx context.Context, userID int64) (Permissions, error) {
 	query := `SELECT permissions.code
               FROM permissions
