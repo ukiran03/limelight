@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/lmittmann/tint"
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/mailer"
 )
@@ -91,10 +90,7 @@ func main() {
 
 	flag.Parse()
 
-	logger := slog.New(tint.NewHandler(os.Stderr, &tint.Options{
-		Level:      slog.LevelDebug,
-		TimeFormat: time.Kitchen,
-	}))
+	logger := NewLogger()
 
 	db, err := openDB(cfg)
 	if err != nil {
