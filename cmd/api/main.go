@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"expvar"
 	"flag"
 	"log/slog"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -124,6 +126,32 @@ func main() {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+
+	expvar.NewString("version").Set(version)
+	// Publish the number of active goroutines.
+	expvar.Publish("goroutines", expvar.Func(func() any {
+		return runtime.NumGoroutine()
+	}))
+
+	// Publish the database connection pool statistics.
+	// TODO: refactor this to correct mappings (ch-18.2)
+	expvar.Publish("database", expvar.Func(func() any {
+		s := db.Stat()
+		return map[string]any{
+			"MaxConnections":      s.MaxConns(),
+			"OpenConnections":     s.NewConnsCount(),
+			"AcquiredConnections": s.AcquireCount(),
+			"TotalConns":          s.TotalConns(),
+			"IdleConns":           s.IdleConns(),
+			"WaitCount":           s.ConstructingConns(),
+			"MaxIdleClosed":       s.MaxIdleDestroyCount(),
+			"MaxLifetimeClosed":   s.MaxLifetimeDestroyCount(),
+		}
+	}))
+	// Publish the current Unix timestamp.
+	expvar.Publish("timestamp", expvar.Func(func() any {
+		return time.Now().Unix()
+	}))
 
 	app := &application{
 		config: cfg,
