@@ -40,6 +40,12 @@ ci-fix:
 run:
     wgo run ./cmd/api -db-dsn=${LIMELIGHT_DB_DSN}
 
+# build the cmd/api application
+build:
+    @echo "> Building cmd/api"
+    go build -ldflags='-s' -o=./bin/api ./cmd/api
+    GOOS=linux GOARCH=amd64 go build -ldflags='-s' -o=./bin/linux_amd64/api ./cmd/api
+
 ## Database migration recipes
 
 # New Database migration
