@@ -134,20 +134,10 @@ func main() {
 	}))
 
 	// Publish the database connection pool statistics.
-	// TODO: refactor this to correct mappings (ch-18.2)
 	expvar.Publish("database", expvar.Func(func() any {
-		s := db.Stat()
-		return map[string]any{
-			"MaxConnections":      s.MaxConns(),
-			"OpenConnections":     s.NewConnsCount(),
-			"AcquiredConnections": s.AcquireCount(),
-			"TotalConns":          s.TotalConns(),
-			"IdleConns":           s.IdleConns(),
-			"WaitCount":           s.ConstructingConns(),
-			"MaxIdleClosed":       s.MaxIdleDestroyCount(),
-			"MaxLifetimeClosed":   s.MaxLifetimeDestroyCount(),
-		}
+		return NewPgxDBStats(db.Stat())
 	}))
+
 	// Publish the current Unix timestamp.
 	expvar.Publish("timestamp", expvar.Func(func() any {
 		return time.Now().Unix()
