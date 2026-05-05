@@ -15,9 +15,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/mailer"
+	"ukiran.com/limelight/internal/vcs"
 )
 
-const version = "1.0.0"
+var version = vcs.Version()
 
 type config struct {
 	port int
