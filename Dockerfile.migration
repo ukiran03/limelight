@@ -1,0 +1,13 @@
+FROM migrate/migrate:v4.17.0
+
+WORKDIR /migrations
+
+# Copy local SQL migration files into the container
+COPY ./migrations .
+
+# ENTRYPOINT for the base command and default arguments
+ENTRYPOINT ["migrate", "-path=/migrations"]
+
+# CMD acts as the default argument. If runs the container without args, it will
+# show the help menu instead of crashing.
+CMD ["-help"]
