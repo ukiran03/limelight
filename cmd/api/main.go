@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/mailer"
 	"ukiran.com/limelight/internal/vcs"
@@ -47,11 +48,12 @@ type config struct {
 }
 
 type application struct {
-	config config
-	logger *slog.Logger
-	models data.Models
-	mailer *mailer.Mailer
-	wg     sync.WaitGroup
+	config       config
+	logger       *slog.Logger
+	models       data.Models
+	mailer       *mailer.Mailer
+	wg           sync.WaitGroup
+	shutdownFunc context.CancelFunc
 }
 
 func main() {
@@ -126,6 +128,14 @@ func main() {
 	defer db.Close()
 	logger.Info("database connection pool established")
 
+	rdb, err := connectRedis("localhost:6379", "") // TODO: get via config
+	if err != nil {
+		logger.Error("unable to connect to redis", "err", err)
+		os.Exit(1)
+	}
+	defer rdb.Close()
+	logger.Info("redis cache connection pool established")
+
 	mailer, err := mailer.New(
 		cfg.smtp.host, cfg.smtp.port, cfg.smtp.username,
 		cfg.smtp.password, cfg.smtp.sender)
@@ -150,11 +160,16 @@ func main() {
 		return time.Now().Unix()
 	}))
 
+	ctx, cancel := context.WithCancel(context.Background())
+
+	movieModel := data.NewCachedMovieModel(ctx, db, rdb)
+
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(db),
-		mailer: mailer,
+		config:       cfg,
+		logger:       logger,
+		models:       data.NewModels(movieModel, db, rdb),
+		mailer:       mailer,
+		shutdownFunc: cancel,
 	}
 
 	err = app.serve()
@@ -190,4 +205,26 @@ func openDB(cfg config) (*pgxpool.Pool, error) {
 	}
 
 	return pool, err
+}
+
+func connectRedis(addr, passwd string) (*redis.Client, error) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         addr,
+		Password:     passwd,
+		DB:           0,
+		PoolSize:     10,
+		MinIdleConns: 5,
+	})
+
+	// shorter timeout for the initial Ping
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		// Clean up the client if the connection is dead
+		_ = rdb.Close()
+		return nil, fmt.Errorf("redis connection failed: %w", err)
+	}
+
+	return rdb, nil
 }

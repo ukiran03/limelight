@@ -21,6 +21,17 @@ type Movie struct {
 	Version   int32     `json:"version"          db:"version"`
 }
 
+type MovieModelInterface interface {
+	Insert(ctx context.Context, movie *Movie) error
+	Get(ctx context.Context, id int64) (*Movie, error)
+	Update(ctx context.Context, movie *Movie) error
+	Delete(ctx context.Context, id int64) error
+	GetAll(
+		ctx context.Context, title string,
+		genres []string, filters Filters,
+	) ([]*Movie, Metadata, error)
+}
+
 type MovieModel struct {
 	DB      *pgxpool.Pool
 	Timeout time.Duration

@@ -9,9 +9,7 @@ import (
 	"ukiran.com/limelight/internal/validator"
 )
 
-func (app *application) createMovieHandler(
-	w http.ResponseWriter, r *http.Request,
-) {
+func (app *application) createMovieHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Title   string       `json:"title"`
 		Year    int32        `json:"year"`
@@ -148,9 +146,7 @@ func (app *application) updateMovieHandler(
 	}
 }
 
-func (app *application) deleteMovieHandler(
-	w http.ResponseWriter, r *http.Request,
-) {
+func (app *application) deleteMovieHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := app.readIDParam(r)
 	if err != nil {
 		app.notFoundResponse(w, r)

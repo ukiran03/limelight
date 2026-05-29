@@ -39,6 +39,8 @@ func (app *application) serve() error {
 
 		app.logger.Info("shutting down server", "signal", s.String())
 
+		app.shutdownFunc() // signals workers listening to ctx.Done() to stop
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -48,6 +50,7 @@ func (app *application) serve() error {
 		}
 
 		app.logger.Info("completing background tasks", "addr", srv.Addr)
+
 		app.wg.Wait()          // block until counter is zero
 		shutdownErrChan <- nil // then complete the shutdown
 	}()
