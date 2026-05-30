@@ -19,18 +19,15 @@ var (
 )
 
 type Models struct {
-	Movies      MovieModelInterface
+	Movies      MovieModel // interface
 	Permissions PermissionModel
 	Tokens      TokenModel
 	Users       UserModel
 }
 
-func NewModels(
-	movieModel MovieModelInterface, db *pgxpool.Pool, rdb *redis.Client,
-) Models {
+func NewModels(movieModel MovieModel, db *pgxpool.Pool, rdb *redis.Client) Models {
 	return Models{
 		Movies: movieModel,
-
 		Permissions: PermissionModel{
 			DB:      db,
 			Timeout: PgxReqCtxTTL,

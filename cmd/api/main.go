@@ -48,12 +48,11 @@ type config struct {
 }
 
 type application struct {
-	config       config
-	logger       *slog.Logger
-	models       data.Models
-	mailer       *mailer.Mailer
-	wg           sync.WaitGroup
-	shutdownFunc context.CancelFunc
+	config config
+	logger *slog.Logger
+	models data.Models
+	mailer *mailer.Mailer
+	wg     sync.WaitGroup
 }
 
 func main() {
@@ -91,9 +90,9 @@ func main() {
 		"sandbox.smtp.mailtrap.io", "SMTP host")
 	flag.IntVar(&cfg.smtp.port, "smtp-port", 25, "SMTP port")
 	flag.StringVar(&cfg.smtp.username, "smtp-username",
-		"17f17f001f2b81", "SMTP username")
+		"4729e4e33bb6b8", "SMTP username")
 	flag.StringVar(&cfg.smtp.password, "smtp-password",
-		"e99508951400a1", "SMTP password")
+		"517bc984e3aa16", "SMTP password")
 	flag.StringVar(
 		&cfg.smtp.sender, "smtp-sender",
 		"Limelight <no-reply@limelight.ukiran.com>", "SMTP sender")
@@ -160,19 +159,20 @@ func main() {
 		return time.Now().Unix()
 	}))
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	movieModel := data.NewCachedMovieModel(ctx, db, rdb)
+	movieModel := data.NewCachedMovieModel(
+		data.NewStoreMovieModel(db, logger), rdb, logger,
+	)
 
 	app := &application{
-		config:       cfg,
-		logger:       logger,
-		models:       data.NewModels(movieModel, db, rdb),
-		mailer:       mailer,
-		shutdownFunc: cancel,
+		config: cfg,
+		logger: logger,
+		models: data.NewModels(movieModel, db, rdb),
+		mailer: mailer,
 	}
 
-	err = app.serve()
+	movieModel.StartCacheWorkers(10) // Start redis cache workers
+
+	err = app.serve(movieModel.StopCacheWorkers)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

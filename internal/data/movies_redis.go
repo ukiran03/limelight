@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -18,34 +18,26 @@ var (
 )
 
 type CachedMovieModel struct {
-	M          MovieModel
+	M          MovieModel // interface
 	Redis      *redis.Client
 	TTL        time.Duration // redis data lifetime
 	cacheQueue chan cacheJob
 	wg         sync.WaitGroup
+	logger     *slog.Logger
 }
 
 func NewCachedMovieModel(
-	ctx context.Context,
-	db *pgxpool.Pool, rdb *redis.Client,
+	movieModel MovieModel,
+	rdb *redis.Client,
+	logger *slog.Logger,
 ) *CachedMovieModel {
 	c := &CachedMovieModel{
-		M: MovieModel{
-			DB:      db,
-			Timeout: PgxReqCtxTTL,
-		},
+		M:          movieModel, // store movie model, a concrete type
 		Redis:      rdb,
 		TTL:        RedisDataTTL,
 		cacheQueue: make(chan cacheJob, 100),
+		logger:     logger,
 	}
-
-	c.StartCacheWorkers(10)
-
-	go func() {
-		<-ctx.Done() // Block until main context is cancelled
-		c.StopCacheWorkers()
-	}()
-
 	return c
 }
 
@@ -59,9 +51,17 @@ func (c *CachedMovieModel) StartCacheWorkers(workers int) {
 	for range workers {
 		c.wg.Add(1)
 		go func() {
+			// LIFO order. wg.Done() should be declared LAST so it runs LAST.
 			defer c.wg.Done()
+
+			// Panic recovery should always wrap the worker's core logic safely
+			defer func() {
+				if pv := recover(); pv != nil {
+					c.logger.Info("redis worker panic recovered", pv)
+				}
+			}()
+
 			for job := range c.cacheQueue {
-				// with reasonable timeout for redis writes
 				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				c.Redis.Set(ctx, job.key, job.data, c.TTL)
 				cancel()
@@ -70,7 +70,7 @@ func (c *CachedMovieModel) StartCacheWorkers(workers int) {
 	}
 }
 
-// For main.go shutdown logic:
+// StopCacheWorkers closes the queue channel and waits for workers to drain it.
 func (c *CachedMovieModel) StopCacheWorkers() {
 	close(c.cacheQueue)
 	c.wg.Wait()
