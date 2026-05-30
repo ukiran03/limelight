@@ -18,7 +18,7 @@ var (
 )
 
 type CachedMovieModel struct {
-	M          MovieModel // interface
+	Store      MovieModel // interface
 	Redis      *redis.Client
 	TTL        time.Duration // redis data lifetime
 	cacheQueue chan cacheJob
@@ -32,7 +32,7 @@ func NewCachedMovieModel(
 	logger *slog.Logger,
 ) *CachedMovieModel {
 	c := &CachedMovieModel{
-		M:          movieModel, // store movie model, a concrete type
+		Store:      movieModel, // store movie model, a concrete type
 		Redis:      rdb,
 		TTL:        RedisDataTTL,
 		cacheQueue: make(chan cacheJob, 100),
@@ -57,7 +57,7 @@ func (c *CachedMovieModel) StartCacheWorkers(workers int) {
 			// Panic recovery should always wrap the worker's core logic safely
 			defer func() {
 				if pv := recover(); pv != nil {
-					c.logger.Info("redis worker panic recovered", pv)
+					c.logger.Info("redis worker panic recovered", "pv", pv)
 				}
 			}()
 
@@ -82,40 +82,41 @@ func (c *CachedMovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 	}
 	cacheKey := fmt.Sprintf("movie:%d", id)
 
-	val, err := c.Redis.Get(ctx, cacheKey).Bytes()
-	// cache hit!
+	// Get from redis
+	val, err := c.Redis.Get(ctx, cacheKey).Result()
 	if err == nil {
-		// Check if it's the "Not Found" sentinel, preventing Cache Penetration
-		if string(val) == nfVal { //
+		// Cache hit!, check if it's nor explicit "Not Found" sentinel
+		if val == nfVal {
 			return nil, ErrRecordNotFound
 		}
-
 		var movie Movie
-		if err := json.Unmarshal(val, &movie); err == nil {
+		if err := json.Unmarshal([]byte(val), &movie); err == nil {
 			return &movie, nil
 		}
+		c.logger.Error("failed to unmarshal cached movie", "error", err)
+	} else if !errors.Is(err, redis.Nil) {
+		// Log real Redis infrastructure errors, but let the code fall through
+		// to DB
+		c.logger.Error("critical redis error", "error", err)
 	}
 
-	// cache miss!, fallback to DB
-	movie, err := c.M.Get(ctx, id) // which returns (*Movie, error)
+	// Cache Miss / Failure -> Fallback to DB
+	movie, err := c.Store.Get(ctx, id)
 	if err != nil {
+		// If the record genuinely doesn't exist, cache the sentinel to protect the DB
 		if errors.Is(err, ErrRecordNotFound) {
-			// Cache the "Not Found" result for 5 minutes, using a shorter TTL
-			// than c.TTL for non-existent records.
-			c.Redis.Set(ctx, cacheKey, nfVal, nfTTL)
-			return nil, err
+			_ = c.Redis.Set(ctx, cacheKey, nfVal, nfTTL).Err()
 		}
 		return nil, err
 	}
 
+	// Queue the background cache write for successful records
 	if movie != nil {
-		// Worker Pool: Save to redis cache
 		if jsonData, err := json.Marshal(movie); err == nil {
 			select {
 			case c.cacheQueue <- cacheJob{key: cacheKey, data: jsonData}:
-				// job sent successfully
 			default:
-				// Queue is full!, drop the cache update
+				c.logger.Warn("cache queue full, dropping update", "key", cacheKey)
 			}
 		}
 	}
@@ -124,11 +125,11 @@ func (c *CachedMovieModel) Get(ctx context.Context, id int64) (*Movie, error) {
 }
 
 func (c *CachedMovieModel) Insert(ctx context.Context, movie *Movie) error {
-	return c.M.Insert(ctx, movie)
+	return c.Store.Insert(ctx, movie)
 }
 
 func (c *CachedMovieModel) Update(ctx context.Context, movie *Movie) error {
-	if err := c.M.Update(ctx, movie); err != nil {
+	if err := c.Store.Update(ctx, movie); err != nil {
 		return err
 	}
 	// proceed only if database transaction succeeds.
@@ -137,7 +138,7 @@ func (c *CachedMovieModel) Update(ctx context.Context, movie *Movie) error {
 }
 
 func (c *CachedMovieModel) Delete(ctx context.Context, id int64) error {
-	if err := c.M.Delete(ctx, id); err != nil {
+	if err := c.Store.Delete(ctx, id); err != nil {
 		return err
 	}
 	cacheKey := fmt.Sprintf("movie:%d", id)
@@ -148,7 +149,7 @@ func (c *CachedMovieModel) Delete(ctx context.Context, id int64) error {
 func (c *CachedMovieModel) GetAll(
 	ctx context.Context, title string, genres []string, filters Filters,
 ) ([]*Movie, Metadata, error) {
-	return c.M.GetAll(ctx, title, genres, filters)
+	return c.Store.GetAll(ctx, title, genres, filters)
 }
 
 // NOTE: look into golang.org/x/sync/singleflight to ensure only one DB
