@@ -15,6 +15,13 @@ services:
       timeout: 5s
       retries: 5
 
+  rdb:
+    image: redis:alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
   db-migration:
     build:
       context: .
@@ -35,11 +42,15 @@ services:
       - "4000:4000"
     environment:
       LIMELIGHT_DB_DSN: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
     depends_on:
       db:
         condition: service_healthy
       db-migration:
         condition: service_completed_successfully
+      rdb:
+        condition: service_started
 
 volumes:
   db_data:
+  redis_data:

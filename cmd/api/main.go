@@ -30,6 +30,7 @@ type config struct {
 		maxIdleConns int
 		maxIdleTime  time.Duration
 	}
+	rdbUrl  string
 	limiter struct {
 		rps     float64
 		burst   int
@@ -66,6 +67,8 @@ func main() {
 		"db-dsn",
 		os.Getenv("LIMELIGHT_DB_DSN"),
 		"PostgreSQL DSN")
+
+	flag.StringVar(&cfg.rdbUrl, "rdb-url", os.Getenv("REDIS_URL"), "Redis URL")
 
 	flag.IntVar(&cfg.db.maxOpenConns, "db-max-open-conns",
 		25, "PostgreSQL max open connections")
@@ -127,6 +130,7 @@ func main() {
 	defer db.Close()
 	logger.Info("database connection pool established")
 
+	// fmt
 	rdb, err := connectRedis("localhost:6379", "") // TODO: get via config
 	if err != nil {
 		logger.Error("unable to connect to redis", "err", err)
