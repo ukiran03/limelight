@@ -28,7 +28,6 @@ services:
       dockerfile: Dockerfile.migration
     environment:
       DATABASE_URL: ${DATABASE_URL}
-    # Using single quotes prevents host-machine shell interpolation issues
     command: -database '${DATABASE_URL}' up
     depends_on:
       db:
@@ -38,8 +37,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "4000:4000"
     environment:
       LIMELIGHT_DB_DSN: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -51,6 +48,21 @@ services:
       rdb:
         condition: service_started
 
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
 volumes:
   db_data:
   redis_data:
+  caddy_data:
+  caddy_config:

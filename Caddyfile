@@ -1,0 +1,9 @@
+# For HTTPS
+# localhost {
+#     reverse_proxy http://api:4000
+# }
+
+# For HTTP
+http://localhost {
+    reverse_proxy http://api:4000
+}
