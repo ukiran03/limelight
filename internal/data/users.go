@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -63,7 +62,7 @@ const pgErrCodeUniqueViolation = "23505"
 var ErrDuplicateEmail = errors.New("duplicate email")
 
 type UserModel struct {
-	DB      *pgxpool.Pool
+	DB      Querier
 	Timeout time.Duration
 }
 

@@ -4,8 +4,6 @@ import (
 	"context"
 	"slices"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Permissions []string
@@ -15,7 +13,7 @@ func (p Permissions) Include(code string) bool {
 }
 
 type PermissionModel struct {
-	DB      *pgxpool.Pool
+	DB      Querier
 	Timeout time.Duration
 }
 

@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"ukiran.com/limelight/internal/validator"
 )
 
@@ -43,7 +42,7 @@ func ValidateTokenPlaintext(v *validator.Validator, tokenPlaintext string) {
 }
 
 type TokenModel struct {
-	DB      *pgxpool.Pool
+	DB      Querier
 	Timeout time.Duration
 }
 

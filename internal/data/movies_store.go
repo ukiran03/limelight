@@ -12,7 +12,7 @@ import (
 )
 
 type StoreMovieModel struct {
-	DB     *pgxpool.Pool
+	DB     Querier
 	TTL    time.Duration
 	logger *slog.Logger // just in case
 }

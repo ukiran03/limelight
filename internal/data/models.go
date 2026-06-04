@@ -3,9 +3,6 @@ package data
 import (
 	"errors"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -25,7 +22,7 @@ type Models struct {
 	Users       UserModel
 }
 
-func NewModels(movieModel MovieModel, db *pgxpool.Pool, rdb *redis.Client) Models {
+func NewModels(movieModel MovieModel, db Querier) Models {
 	return Models{
 		Movies: movieModel,
 		Permissions: PermissionModel{
