@@ -12,11 +12,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/mailer"
 	"ukiran.com/limelight/internal/vcs"
+	"ukiran.com/limelight/internal/workers"
 )
 
 var version = vcs.Version()
@@ -49,11 +53,13 @@ type config struct {
 }
 
 type application struct {
-	config config
-	logger *slog.Logger
-	models data.Models
-	mailer *mailer.Mailer
-	wg     sync.WaitGroup
+	config      config
+	logger      *slog.Logger
+	models      data.Models
+	dbPool      *pgxpool.Pool
+	mailer      *mailer.Mailer
+	wg          sync.WaitGroup // FIXME: obsolete
+	riverClient *river.Client[pgx.Tx]
 }
 
 func main() {
@@ -122,14 +128,6 @@ func main() {
 
 	logger := NewLogger()
 
-	db, err := openDB(cfg)
-	if err != nil {
-		logger.Error("unable to connect to database", "err", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-	logger.Info("database connection pool established")
-
 	// fmt
 	rdb, err := connectRedis("localhost:6379", "") // TODO: get via config
 	if err != nil {
@@ -139,11 +137,37 @@ func main() {
 	defer rdb.Close()
 	logger.Info("redis cache connection pool established")
 
+	db, err := openDB(cfg)
+	if err != nil {
+		logger.Error("unable to connect to database", "err", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+	logger.Info("database connection pool established")
+
 	mailer, err := mailer.New(
 		cfg.smtp.host, cfg.smtp.port, cfg.smtp.username,
 		cfg.smtp.password, cfg.smtp.sender)
 	if err != nil {
 		logger.Error(err.Error())
+		os.Exit(1)
+	}
+
+	// Register River workers
+	riverWorkers := river.NewWorkers()
+	river.AddWorker(riverWorkers, &workers.OnBoardEmailWorker{
+		M: mailer,
+	})
+	// Configure River Client
+	riverClient, err := river.NewClient(riverpgxv5.New(db), &river.Config{
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: 10}, // Adjust concurrency limit
+		},
+		Workers: riverWorkers,
+	})
+	if err != nil {
+		logger.Error(err.Error())
+		// log.Fatalf("failed to create river client: %v", err)
 		os.Exit(1)
 	}
 
@@ -168,15 +192,38 @@ func main() {
 	)
 
 	app := &application{
-		config: cfg,
-		logger: logger,
-		models: data.NewModels(movieModel, db, rdb),
-		mailer: mailer,
+		config:      cfg,
+		logger:      logger,
+		models:      data.NewModels(movieModel, db),
+		dbPool:      db,
+		mailer:      mailer,
+		riverClient: riverClient,
 	}
+
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
 
 	movieModel.StartCacheWorkers(10) // Start redis cache workers
 
-	err = app.serve(movieModel.StopCacheWorkers)
+	// Start processing jobs in the background
+	if err := riverClient.Start(appCtx); err != nil {
+		logger.Error("failed to start river", "error", err)
+		os.Exit(1)
+	}
+
+	appCleanup := func(ctx context.Context) {
+		// Now that the API is shut down and no new cache jobs can possibly be
+		// sent, safely stop the workers and drain the remaining queue items.
+		app.logger.Info("completing redis cache jobs")
+		movieModel.StopCacheWorkers()
+
+		app.logger.Info("stopping river client workers...")
+		if err := riverClient.Stop(ctx); err != nil {
+			app.logger.Error("error stopping river client", "error", err)
+		}
+	}
+
+	err = app.serve(appCancel, appCleanup)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)

@@ -140,6 +140,7 @@ func (app *application) readInt(
 	return i
 }
 
+/* FIXME: obsolete
 func (app *application) background(fn func()) {
 	// launch a background goroutine
 
@@ -158,3 +159,4 @@ func (app *application) background(fn func()) {
 		fn()
 	}()
 }
+*/
