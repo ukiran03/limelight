@@ -1,19 +1,16 @@
 package main
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
 	"ukiran.com/limelight/internal/data"
 	"ukiran.com/limelight/internal/validator"
+	"ukiran.com/limelight/internal/workers"
 )
 
-func (app *application) registerUserHandler(
-	w http.ResponseWriter, r *http.Request,
-) {
+func (app *application) registerUserHandler(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Name     string `json:"name"`
 		Email    string `json:"email"`
@@ -45,7 +42,18 @@ func (app *application) registerUserHandler(
 		return
 	}
 
-	err = app.models.Users.Insert(r.Context(), user)
+	ctx := r.Context()
+	tx, err := app.dbPool.Begin(ctx)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
+
+	defer tx.Rollback(ctx)
+
+	txModels := data.NewModels(app.models.Movies, tx)
+
+	err = txModels.Users.Insert(ctx, user)
 	if err != nil {
 		switch {
 		case errors.Is(err, data.ErrDuplicateEmail):
@@ -58,7 +66,7 @@ func (app *application) registerUserHandler(
 	}
 
 	// Add the "movies:read" permission for the new user
-	err = app.models.Permissions.AddForUser(r.Context(), user.ID, "movies:read")
+	err = txModels.Permissions.AddForUser(ctx, user.ID, "movies:read")
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
@@ -66,29 +74,36 @@ func (app *application) registerUserHandler(
 
 	// After the user record has been created in the database, generate a new
 	// activation token for the user
-	token, err := app.models.Tokens.New(
-		r.Context(), user.ID, (3 * 24 * time.Hour), data.ScopeActivation)
+	token, err := txModels.Tokens.New(
+		ctx, user.ID, (3 * 24 * time.Hour), data.ScopeActivation,
+	)
 	if err != nil {
 		app.serverErrorResponse(w, r, err)
 		return
 	}
 
-	// send the email in a background goroutine
-	app.background(func() {
-		data := map[string]any{
-			"activationToken": token.Plaintext,
-			"userID":          user.ID,
-		}
+	// Pass the same raw 'tx' directly into River
+	_, err = app.riverClient.InsertTx(ctx, tx,
+		workers.OnBoardEmailArgs{
+			Email:             user.Email,
+			EmailTemplateFile: "user_welcome.tmpl",
+			EmailData: map[string]any{
+				"activationToken": token.Plaintext,
+				"userID":          user.ID,
+			},
+		},
+		nil,
+	)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
-		// create a 10-second timeout specifically for this email attempt
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		err = app.mailer.Send(ctx, user.Email, "user_welcome.tmpl", data)
-		if err != nil {
-			app.logger.Error(fmt.Sprintf("failed to send email: %v", err))
-		}
-	})
+	// Commit the transaction, Everything hits the database successfully!
+	if err := tx.Commit(ctx); err != nil {
+		app.serverErrorResponse(w, r, err)
+		return
+	}
 
 	err = app.writeJSON(w, http.StatusCreated, envelope{"user": user}, nil)
 	if err != nil {
