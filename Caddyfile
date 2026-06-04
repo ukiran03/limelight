@@ -7,5 +7,5 @@
 # For HTTP
 http://localhost {
     respond /debug/* "Not Permitted" 403
-    reverse_proxy http://api:4000
+    reverse_proxy api:4000
 }
