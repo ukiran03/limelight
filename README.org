@@ -1,6 +1,6 @@
-*** TODO Tasks to complete [0/5]
+*** TODO Tasks to complete [2/5]
 + [ ] Add README
-+ [ ] Adding a Reverse Proxy (Nginx/Caddy)
++ [X] Adding a Reverse Proxy (Nginx/Caddy)
   - This service will handle SSL/TLS termination (HTTPS) and forward traffic to
     your Go container on port 4000.
 + [ ] Add a minimal web ui for stats
@@ -8,6 +8,6 @@
   - Create a workflow that runs your tests (go test ./...) every time you push
   - If tests pass, have the action build your Docker image and push it to
     Docker Hub or GitHub Container Registry (GHCR)
-+ [ ] Kill test
++ [X] Kill test
   - Run docker stop <db-container-id> and see if your Go app gracefully handles
     the lost connection or if it panics and dies.
